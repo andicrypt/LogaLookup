@@ -21,9 +21,10 @@ use subroutines::{
     poly_iop::PolyIOP,
 };
 
-const SUPPORTED_SIZE: usize = 16;
-const MIN_NUM_VARS: usize = 5;
-const MAX_NUM_VARS: usize = 15;
+const SUPPORTED_SIZE: usize = 20;
+const MIN_NUM_VARS: usize = 8;
+const MAX_NUM_VARS: usize = 19;
+const STEP_NUM_VARS: usize = 2;
 const MIN_CUSTOM_DEGREE: usize = 1;
 const MAX_CUSTOM_DEGREE: usize = 32;
 const HIGH_DEGREE_TEST_NV: usize = 10;
@@ -71,7 +72,7 @@ fn bench_vanilla_plonk(
     let mut file_loga = File::create(filename_loga).unwrap();
     let mut file_plk = File::create(filename_plk).unwrap();
     let vanilla_gate = CustomizedGates::vanilla_plonk_gate();
-    for nv in MIN_NUM_VARS..=MAX_NUM_VARS {
+    for nv in (MIN_NUM_VARS..=MAX_NUM_VARS).step_by(STEP_NUM_VARS) {
         println!("Vanilla Plonk with {nv} variables:");
         bench_mock_circuit_zkp_helper_with_loga_lk(&mut file_loga, nv, &vanilla_gate, pcs_srs)?;
         bench_mock_circuit_zkp_helper_with_plk(&mut file_plk, nv, &vanilla_gate, pcs_srs)?;
@@ -89,7 +90,7 @@ fn bench_jellyfish_plonk(
     let mut file_loga = File::create(filename_loga).unwrap();
     let mut file_plk = File::create(filename_plk).unwrap();
     let jf_gate = CustomizedGates::jellyfish_turbo_plonk_gate();
-    for nv in MIN_NUM_VARS..=MAX_NUM_VARS {
+    for nv in (MIN_NUM_VARS..=MAX_NUM_VARS).step_by(STEP_NUM_VARS) {
         println!("Jellyfish with {} variables", nv);
         bench_mock_circuit_zkp_helper_with_loga_lk(&mut file_loga, nv, &jf_gate, pcs_srs)?;
         bench_mock_circuit_zkp_helper_with_plk(&mut file_plk, nv, &jf_gate, pcs_srs)?;
@@ -134,11 +135,11 @@ fn bench_mock_circuit_zkp_helper_with_loga_lk(
     pcs_srs: &MultilinearUniversalParams<Bls12_381>,
 ) -> Result<(), HyperPlonkErrors> {
     let repetition = if nv < 10 {
-        5
+        10
     } else if nv < 20 {
-        3
+        5
     } else {
-        1
+        3
     };
 
     // LOGACIRCUIT AND LOGA SNARK
@@ -204,11 +205,11 @@ fn bench_mock_circuit_zkp_helper_with_plk(
     pcs_srs: &MultilinearUniversalParams<Bls12_381>,
 ) -> Result<(), HyperPlonkErrors> {
     let repetition = if nv < 10 {
-        5
+        10
     } else if nv < 20 {
-        3
+        5
     } else {
-        1
+        3
     };
 
     //==========================================================
