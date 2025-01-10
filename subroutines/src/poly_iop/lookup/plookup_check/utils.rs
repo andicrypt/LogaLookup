@@ -1,8 +1,7 @@
-use arithmetic::bit_decompose;
 use ark_ff::PrimeField;
 use ark_poly::DenseMultilinearExtension;
 use dashmap::{DashMap, DashSet};
-use rayon::prelude::{IndexedParallelIterator, IntoParallelRefIterator, ParallelIterator};
+use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use std::sync::Arc;
 
 use crate::poly_iop::errors::PolyIOPErrors;
@@ -50,71 +49,74 @@ pub(super) fn compute_h<F: PrimeField>(
     Ok(evaluations)
 }
 
-pub(super) fn get_primitive_polynomial(n: usize) -> Result<Vec<usize>, PolyIOPErrors> {
-    if !(2..=16).contains(&n) {
+pub(super) fn get_primitive_polynomial(nv: usize) -> Result<usize, PolyIOPErrors> {
+    if !(2..=33).contains(&nv) {
         return Err(PolyIOPErrors::InvalidProof(
-            "Only support primitive polynomial whose degree >= 2 and <= 15".to_string(),
+            "Only support primitive polynomial whose degree >= 2 and <= 32".to_string(),
         ));
     }
-    let primitive_polynomial: Vec<Vec<usize>> = vec![
-        vec![1, 1, 1],                                                 //2
-        vec![1, 0, 1, 1],                                              //3
-        vec![1, 0, 0, 1, 1],                                           //4
-        vec![1, 0, 0, 1, 0, 1],                                        //5
-        vec![1, 0, 0, 0, 0, 1, 1],                                     //6
-        vec![1, 0, 0, 0, 0, 0, 1, 1],                                  //7
-        vec![1, 0, 0, 0, 1, 1, 1, 0, 1],                               //8
-        vec![1, 0, 0, 0, 0, 1, 0, 0, 0, 1],                            //9
-        vec![1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1],                         //10
-        vec![1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1],                      //11
-        vec![1, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 1, 1],                   //12
-        vec![1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 1, 1],                //13
-        vec![1, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 1, 1],             //14
-        vec![1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1],          //15
-        vec![1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1],       //16
-        vec![1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1],    //17
-        vec![1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1], //18
+
+    let primitive_polynomial: Vec<usize> = vec![
+        0b111,                               //2
+        0b1011,                              //3
+        0b10011,                             //4
+        0b100101,                            //5
+        0b1000011,                           //6
+        0b10000011,                          //7
+        0b100011101,                         //8
+        0b1000010001,                        //9
+        0b10000001001,                       //10
+        0b100000000101,                      //11
+        0b1000001010011,                     //12
+        0b10000000011011,                    //13
+        0b100000101000011,                   //14
+        0b1000000000000011,                  //15
+        0b10001000000001011,                 //16
+        0b100000000000001001,                //17
+        0b1000000000010000001,               //18
+        0b10000000000001100011,              //19
+        0b100000000000000001001,             //20
+        0b1000000000000000000101,            //21
+        0b10000000000000000000011,           //22
+        0b100000000000000000100001,          //23
+        0b1000000000000000000011011,         //24
+        0b10000000000000000000001001,        //25
+        0b100000000000000000110000011,       //26
+        0b1000000000000000000110000011,      //27
+        0b10000000000000000000000001001,     //28
+        0b100000000000000000000000000101,    //29
+        0b1000000100000000000000000000111,   //30
+        0b10000000000000000000000000001001,  //31
+        0b100000000100000000000000000000111, //32
     ];
-    Ok(primitive_polynomial[n - 2].clone())
+    Ok(primitive_polynomial[nv - 2].clone())
 }
 
 /// g_mu(b1,...,b_mu) = (b_mu, b1', ... , b_{mu-1}')
 ///
-pub(super) fn next_element(
-    cur_num: usize,
-    nv: usize,
-    s: &[usize], // primitive polynomial
-) -> usize {
-    let bit_sequence = bit_decompose(cur_num as u64, nv);
-    let s_bool = s[1..nv].par_iter().map(|x| *x == 1).collect::<Vec<bool>>();
+pub(super) fn next_element(cur_num: usize, nv: usize) -> usize {
+    // Reverse current number and exclude the LSB
+    // For example, cur_num = 14 (0b1110)
+    // Reverse form: 0b0111
+    // After exclusion: 0b111
+    let reverse_bit = reverse_bits_func(cur_num, nv);
+    let reverse_bit_short = reverse_bit & ((1 << (nv - 1)) - 1); // exclude the first bit
 
-    let sign = bit_sequence[0];
-    let next_num = project(
-        &[
-            transform(&bit_sequence[1..nv], &s_bool, sign).as_ref(),
-            [bit_sequence[0]].as_ref(),
-        ]
-        .concat(),
-    ) as usize;
+    // Exclude the first and last bit, corresponding to the highest and free term.
+    // For example, with primitive polynomial which generate GF(2^3): X^3 + X + 1
+    // Binary representation: 1011
+    // After exclusion: 01
+    let s = get_primitive_polynomial(nv).unwrap();
+    let s_trim = (s & ((1 << (nv - 1)) - 1)) >> 1;
+
+    let first_bit = (reverse_bit >> (nv - 1)) & 1;
+
+    let next_num = reverse_bits_func(
+        ((reverse_bit_short ^ if first_bit == 1 { s_trim } else { 0 }) << 1) + first_bit,
+        nv,
+    );
 
     next_num
-}
-
-pub(super) fn transform(a: &[bool], s: &[bool], sign: bool) -> Vec<bool> {
-    a.par_iter()
-        .zip(s.par_iter())
-        .map(|(&a_val, &s_val)| if s_val { a_val ^ sign } else { a_val })
-        .collect::<Vec<bool>>()
-}
-
-/// Project a little endian binary vector into an integer.
-pub(super) fn project(input: &[bool]) -> u64 {
-    let mut res = 0;
-    for &e in input.iter().rev() {
-        res <<= 1;
-        res += e as u64;
-    }
-    res
 }
 
 pub fn embed<F: PrimeField>(
@@ -125,18 +127,13 @@ pub fn embed<F: PrimeField>(
         poly_evals.len() == (1 << nv) - 1,
         "Embedded evaluations must be in form of pow(2,nv) - 1"
     );
-    let s = get_primitive_polynomial(nv)?;
+
     let mut embedded_poly_evals: Vec<F> = vec![F::zero(); 1 << nv];
-
-    let mut res = vec![];
     let mut cur_element: usize = 1 << (nv - 1);
-
-    res.push(cur_element);
 
     for item in poly_evals.iter() {
         embedded_poly_evals[cur_element] = *item;
-        cur_element = next_element(cur_element, nv, &s);
-        res.push(cur_element);
+        cur_element = next_element(cur_element, nv);
     }
 
     Ok(Arc::new(DenseMultilinearExtension::from_evaluations_vec(
@@ -152,8 +149,10 @@ pub(super) fn compute_poly_delta<F: PrimeField>(
     poly: &Arc<DenseMultilinearExtension<F>>,
     nv: usize,
 ) -> Result<Arc<DenseMultilinearExtension<F>>, PolyIOPErrors> {
-    let s = get_primitive_polynomial(nv)?;
-    let s_bool = s[1..nv].iter().map(|x| *x == 1).collect::<Vec<bool>>();
+    let s = get_primitive_polynomial(nv).unwrap();
+
+    // trim first and last bit of binary representation of primitive polynomial
+    let s_trim = (s & ((1 << (nv - 1)) - 1)) >> 1;
 
     let poly_evals = &poly.evaluations;
 
@@ -161,29 +160,32 @@ pub(super) fn compute_poly_delta<F: PrimeField>(
     evaluations.push(poly_evals[0]);
 
     for i in 1..(1 << nv) {
-        let bit_sequence = bit_decompose(i as u64, nv);
-        let sign = bit_sequence[0];
-        let x0 = project(&[bit_sequence[1..nv].as_ref(), [false].as_ref()].concat()) as usize;
-        let x1 = project(
-            &[
-                transform(&bit_sequence[1..nv], &s_bool, sign).as_ref(),
-                [true].as_ref(),
-            ]
-            .concat(),
-        ) as usize;
+        let reverse_bit = reverse_bits_func(i, nv);
+        let reverse_bit_short = reverse_bit & ((1 << (nv - 1)) - 1); // exclude the first bit
 
-        let sign = bit_sequence[0];
-        if !sign {
-            evaluations.push(poly_evals[x0]);
-        } else {
-            evaluations.push(poly_evals[x1]);
-        }
+        let x_mu = (reverse_bit >> (nv - 1)) & 1;
+        let next: usize;
+
+        next = reverse_bits_func(
+            ((reverse_bit_short ^ if x_mu == 1 { s_trim } else { 0 }) << 1) + x_mu,
+            nv,
+        );
+
+        evaluations.push(poly_evals[next]);
     }
 
     Ok(Arc::new(DenseMultilinearExtension::from_evaluations_vec(
         nv,
         evaluations,
     )))
+}
+
+/// reverse_bits_func reverse the binary representation of number, and truncate its size
+/// For example, num=6 (0b110), bit_size=3
+/// Reverse form: 0b011
+pub fn reverse_bits_func(num: usize, bit_size: usize) -> usize {
+    let reversed = num.reverse_bits(); // Reverse all 64 bits
+    reversed >> (64 - bit_size) // Shift to keep only the first `bit_size` bits
 }
 
 #[cfg(test)]
