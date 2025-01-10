@@ -1,0 +1,579 @@
+
+[nix-shell:~/LogaLookup]$ git fetch origin
+remote: Enumerating objects: 16, done.
+remote: Counting objects: 100% (16/16), done.
+remote: Compressing objects: 100% (5/5), done.
+remote: Total 9 (delta 3), reused 9 (delta 3), pack-reused 0 (from 0)
+Unpacking objects: 100% (9/9), 1.18 KiB | 606.00 KiB/s, done.
+From https://github.com/andicrypt/LogaLookup
+ + 02e98ad...929f055 bench      -> origin/bench  (forced update)
+
+[nix-shell:~/LogaLookup]$ git reset --hard origin/bench
+HEAD is now at 929f055 chore: improve benchmark
+
+[nix-shell:~/LogaLookup]$ git reset --hard origin/bench^C
+
+[nix-shell:~/LogaLookup]$ git log
+commit 929f055d463f8548b4c1759e4c8f82f0eb42198f (HEAD -> bench, origin/ben
+ch)
+Author: andicrypt <keepgoing0901@gmail.com>
+Date:   Thu Jan 9 11:37:56 2025 +0700
+
+    chore: improve benchmark
+
+commit 61fa3686258a8338a17014fdcf94f238fe3618f5
+Author: andicrypt <keepgoing0901@gmail.com>
+Date:   Fri Jan 10 18:14:37 2025 +0700
+
+    feat: optimize plookup execution
+
+    This PR aims to enhance Plookup in term of execution time by applying
+    bit manipulation in the process of embedding and computing polynomials
+,
+    replacing vector data structure. As a result, the proof generation tim
+e
+    is reduced by half as before.
+
+commit a9ea800408a1c22b73976fea813f5576ae21f475
+Author: andicrypt <keepgoing0901@gmail.com>
+Date:   Mon Nov 27 21:44:57 2023 +0700
+
+    chore: add readme for benchmarking subroutines
+
+commit b0ad671567141ec0d02ab47d3082606485df86f2
+Author: tamtamhihi <tam.ngocbang.nguyen@gmail.com>
+Date:   Sat Jul 15 15:20:29 2023 +0700
+
+    Add benchmark and graph plot
+
+commit d5ce3a7db1147a4188470a287a6da48d5704e157
+Author: andicrypt <keepgoing0901@gmail.com>
+Date:   Tue Jul 4 10:38:49 2023 +0700
+
+    update mock circuit for plookup
+
+commit 5cd373970de70ee24030d876a3ea616b0677ba35
+Author: tamtamhihi <tam.ngocbang.nguyen@gmail.com>
+Date:   Mon Jul 3 22:26:58 2023 +0700
+
+    Add plookup to SNARK
+
+commit 267d228115e4232b39c865bba809d25fa2741c88
+Author: tamtamhihi <tam.ngocbang.nguyen@gmail.com>
+Date:   Sun Jul 2 21:58:53 2023 +0700
+
+[nix-shell:~/LogaLookup]$ RAYON_NUM_THREADS=32 cargo bench --package hyper
+plonk -- vanilla
+   Compiling hyperplonk v0.1.0 (/home/ubuntu/LogaLookup/hyperplonk)
+    Finished bench [optimized] target(s) in 7.11s
+     Running unittests src/lib.rs (target/release/deps/hyperplonk-953dcc56
+75cc8d59)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out
+; finished in 0.00s
+
+     Running benches/bench.rs (target/release/deps/hyperplonk_benches-83e5
+a95f2ae08bf3)
+start benchmark with #32 threads
+Vanilla Plonk with 8 variables:
+ 8 variables [loga]:     17299 us,    132715 us,      9725 us
+ 8 variables [p-lk]:     19242 us,    148094 us,     17874 us
+Vanilla Plonk with 10 variables:
+10 variables [loga]:     35226 us,    186914 us,     10747 us
+10 variables [p-lk]:     38951 us,    220695 us,     19231 us
+Vanilla Plonk with 12 variables:
+12 variables [loga]:    121506 us,    307582 us,     12660 us
+12 variables [p-lk]:    128359 us,    394595 us,     20121 us
+Vanilla Plonk with 14 variables:
+14 variables [loga]:    390162 us,    632699 us,     12144 us
+14 variables [p-lk]:    427383 us,    947024 us,     23048 us
+Vanilla Plonk with 16 variables:
+16 variables [loga]:   1482838 us,   1705919 us,     13644 us
+16 variables [p-lk]:   1665787 us,   2870710 us,     23127 us
+Vanilla Plonk with 18 variables:
+^[[A18 variables [loga]:   5664887 us,   5968103 us,     13395 us
+18 variables [p-lk]:   6140764 us,  10458065 us,     23903 us
+
+
+[nix-shell:~/LogaLookup]$ RAYON_NUM_THREADS=8 cargo bench --package hyperp
+lonk -- vanilla
+    Finished bench [optimized] target(s) in 0.06s
+     Running unittests src/lib.rs (target/release/deps/hyperplonk-953dcc56
+75cc8d59)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out
+; finished in 0.00s
+
+     Running benches/bench.rs (target/release/deps/hyperplonk_benches-83e5
+a95f2ae08bf3)
+start benchmark with #8 threads
+Vanilla Plonk with 8 variables:
+ 8 variables [loga]:     21073 us,     50277 us,      8874 us
+ 8 variables [p-lk]:     22924 us,     66402 us,     16776 us
+Vanilla Plonk with 10 variables:
+10 variables [loga]:     54915 us,     92028 us,      9710 us
+10 variables [p-lk]:     60025 us,    136835 us,     18085 us
+Vanilla Plonk with 12 variables:
+12 variables [loga]:    200400 us,    224374 us,     10279 us
+12 variables [p-lk]:    218322 us,    371885 us,     19053 us
+Vanilla Plonk with 14 variables:
+14 variables [loga]:    605366 us,    627051 us,     10810 us
+14 variables [p-lk]:    657633 us,   1084235 us,     19941 us
+Vanilla Plonk with 16 variables:
+16 variables [loga]:   2322120 us,   2197494 us,     11304 us
+16 variables [p-lk]:   2527123 us,   3940085 us,     21220 us
+Vanilla Plonk with 18 variables:
+18 variables [loga]:   9140799 us,   8606272 us,     12153 us
+18 variables [p-lk]:   9890328 us,  15964033 us,     22321 us
+
+
+[nix-shell:~/LogaLookup]$ RAYON_NUM_THREADS=16 cargo bench --package hyper
+plonk -- vanilla
+    Finished bench [optimized] target(s) in 0.06s
+     Running unittests src/lib.rs (target/release/deps/hyperplonk-953dcc56
+75cc8d59)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out
+; finished in 0.00s
+
+     Running benches/bench.rs (target/release/deps/hyperplonk_benches-83e5
+a95f2ae08bf3)
+start benchmark with #16 threads
+Vanilla Plonk with 8 variables:
+ 8 variables [loga]:     15362 us,     85448 us,      8764 us
+ 8 variables [p-lk]:     16595 us,     97590 us,     15945 us
+Vanilla Plonk with 10 variables:
+10 variables [loga]:     33486 us,    127918 us,      9272 us
+10 variables [p-lk]:     36623 us,    157938 us,     17053 us
+Vanilla Plonk with 12 variables:
+12 variables [loga]:    116027 us,    231419 us,      9703 us
+12 variables [p-lk]:    126783 us,    317608 us,     17876 us
+Vanilla Plonk with 14 variables:
+14 variables [loga]:    400250 us,    530350 us,     10254 us
+14 variables [p-lk]:    436897 us,    848530 us,     18742 us
+Vanilla Plonk with 16 variables:
+16 variables [loga]:   1552593 us,   1603940 us,     10693 us
+16 variables [p-lk]:   1696861 us,   2816800 us,     19771 us
+Vanilla Plonk with 18 variables:
+18 variables [loga]:   6220189 us,   6004938 us,     11392 us
+18 variables [p-lk]:   6788608 us,  11332703 us,     20966 us
+
+
+[nix-shell:~/LogaLookup]$ RAYON_NUM_THREADS=24 cargo bench --package hyper
+plonk -- vanilla
+    Finished bench [optimized] target(s) in 0.06s
+     Running unittests src/lib.rs (target/release/deps/hyperplonk-953dcc56
+75cc8d59)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out
+; finished in 0.00s
+
+     Running benches/bench.rs (target/release/deps/hyperplonk_benches-83e5
+a95f2ae08bf3)
+start benchmark with #24 threads
+Vanilla Plonk with 8 variables:
+ 8 variables [loga]:     17066 us,    109932 us,      9243 us
+ 8 variables [p-lk]:     18325 us,    125387 us,     17117 us
+Vanilla Plonk with 10 variables:
+10 variables [loga]:     34676 us,    159665 us,     10090 us
+10 variables [p-lk]:     37838 us,    191689 us,     18101 us
+Vanilla Plonk with 12 variables:
+12 variables [loga]:    121993 us,    273079 us,     10577 us
+12 variables [p-lk]:    130917 us,    359508 us,     19327 us
+Vanilla Plonk with 14 variables:
+14 variables [loga]:    388552 us,    594338 us,     11312 us
+14 variables [p-lk]:    422849 us,    904991 us,     20214 us
+Vanilla Plonk with 16 variables:
+16 variables [loga]:   1519724 us,   1692623 us,     11662 us
+16 variables [p-lk]:   1647741 us,   2874007 us,     21198 us
+Vanilla Plonk with 18 variables:
+18 variables [loga]:   5717584 us,   6050578 us,     12328 us
+18 variables [p-lk]:   6241350 us,  10480170 us,     22107 us
+
+
+[nix-shell:~/LogaLookup]$ RAYON_NUM_THREADS=32 cargo bench --package subro
+utines -- lk plk
+   Compiling subroutines v0.1.0 (/home/ubuntu/LogaLookup/subroutines)
+    Finished bench [optimized] target(s) in 8.09s
+     Running unittests src/lib.rs (target/release/deps/subroutines-e811429
+f2949b299)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 35 filtered ou
+t; finished in 0.00s
+
+     Running benches/pcs_bench.rs (target/release/deps/pcs_bench-a141e5535
+14faf82)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+; finished in 0.00s
+
+     Running benches/iop_bench.rs (target/release/deps/poly_iop_benches-80
+65376909cae2fb)
+lookup check proving time for 8 variables: 28466925 ns
+lookup check verification time for 8 variables: 435828 ns
+====================================
+lookup check proving time for 10 variables: 40728830 ns
+lookup check verification time for 10 variables: 578654 ns
+====================================
+lookup check proving time for 12 variables: 75819805 ns
+lookup check verification time for 12 variables: 659620 ns
+====================================
+lookup check proving time for 14 variables: 188217832 ns
+lookup check verification time for 14 variables: 736555 ns
+====================================
+lookup check proving time for 16 variables: 608824330 ns
+lookup check verification time for 16 variables: 808578 ns
+====================================
+lookup check proving time for 18 variables: 2141031275 ns
+lookup check verification time for 18 variables: 847404 ns
+====================================
+plookup check proving time for 8 variables: 24558949 ns
+plookup check verification time for 8 variables: 283184 ns
+====================================
+plookup check proving time for 10 variables: 44395533 ns
+plookup check verification time for 10 variables: 370836 ns
+====================================
+plookup check proving time for 12 variables: 110685896 ns
+plookup check verification time for 12 variables: 410221 ns
+====================================
+plookup check proving time for 14 variables: 364233990 ns
+plookup check verification time for 14 variables: 412558 ns
+====================================
+plookup check proving time for 16 variables: 1319393411 ns
+plookup check verification time for 16 variables: 470051 ns
+====================================
+plookup check proving time for 18 variables: 5015458119 ns
+plookup check verification time for 18 variables: 505761 ns
+====================================
+
+[nix-shell:~/LogaLookup]$ RAYON_NUM_THREADS=8 cargo bench --package subrou
+tines -- lk plk
+    Finished bench [optimized] target(s) in 0.06s
+     Running unittests src/lib.rs (target/release/deps/subroutines-e811429
+f2949b299)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 35 filtered ou
+t; finished in 0.00s
+
+     Running benches/pcs_bench.rs (target/release/deps/pcs_bench-a141e5535
+14faf82)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+; finished in 0.00s
+
+     Running benches/iop_bench.rs (target/release/deps/poly_iop_benches-80
+65376909cae2fb)
+lookup check proving time for 8 variables: 13931987 ns
+lookup check verification time for 8 variables: 253503 ns
+====================================
+lookup check proving time for 10 variables: 27583730 ns
+lookup check verification time for 10 variables: 321842 ns
+====================================
+lookup check proving time for 12 variables: 81012927 ns
+lookup check verification time for 12 variables: 353646 ns
+====================================
+lookup check proving time for 14 variables: 222266982 ns
+lookup check verification time for 14 variables: 396110 ns
+====================================
+lookup check proving time for 16 variables: 816066656 ns
+lookup check verification time for 16 variables: 425397 ns
+====================================
+lookup check proving time for 18 variables: 3223194314 ns
+lookup check verification time for 18 variables: 491622 ns
+====================================
+plookup check proving time for 8 variables: 18831266 ns
+plookup check verification time for 8 variables: 185595 ns
+====================================
+plookup check proving time for 10 variables: 49252162 ns
+plookup check verification time for 10 variables: 218854 ns
+====================================
+plookup check proving time for 12 variables: 165142863 ns
+plookup check verification time for 12 variables: 240347 ns
+====================================
+plookup check proving time for 14 variables: 494180183 ns
+plookup check verification time for 14 variables: 259118 ns
+====================================
+plookup check proving time for 16 variables: 1935971091 ns
+plookup check verification time for 16 variables: 302035 ns
+====================================
+plookup check proving time for 18 variables: 8028105960 ns
+plookup check verification time for 18 variables: 329118 ns
+====================================
+
+[nix-shell:~/LogaLookup]$ RAYON_NUM_THREADS=16 cargo bench --package subro
+utines -- lk plk
+    Finished bench [optimized] target(s) in 0.06s
+     Running unittests src/lib.rs (target/release/deps/subroutines-e811429
+f2949b299)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 35 filtered ou
+t; finished in 0.00s
+
+     Running benches/pcs_bench.rs (target/release/deps/pcs_bench-a141e5535
+14faf82)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+; finished in 0.00s
+
+     Running benches/iop_bench.rs (target/release/deps/poly_iop_benches-80
+65376909cae2fb)
+lookup check proving time for 8 variables: 19997591 ns
+lookup check verification time for 8 variables: 414105 ns
+====================================
+lookup check proving time for 10 variables: 33585256 ns
+lookup check verification time for 10 variables: 462949 ns
+====================================
+lookup check proving time for 12 variables: 64191815 ns
+lookup check verification time for 12 variables: 463735 ns
+====================================
+lookup check proving time for 14 variables: 172008326 ns
+lookup check verification time for 14 variables: 467585 ns
+====================================
+lookup check proving time for 16 variables: 591175564 ns
+lookup check verification time for 16 variables: 497834 ns
+====================================
+lookup check proving time for 18 variables: 2288365797 ns
+lookup check verification time for 18 variables: 528726 ns
+====================================
+plookup check proving time for 8 variables: 18481861 ns
+plookup check verification time for 8 variables: 246694 ns
+====================================
+plookup check proving time for 10 variables: 38548752 ns
+plookup check verification time for 10 variables: 273902 ns
+====================================
+plookup check proving time for 12 variables: 105164000 ns
+plookup check verification time for 12 variables: 290226 ns
+====================================
+plookup check proving time for 14 variables: 363799072 ns
+plookup check verification time for 14 variables: 291059 ns
+====================================
+plookup check proving time for 16 variables: 1368874419 ns
+plookup check verification time for 16 variables: 301905 ns
+====================================
+plookup check proving time for 18 variables: 5756317655 ns
+plookup check verification time for 18 variables: 334049 ns
+====================================
+
+[nix-shell:~/LogaLookup]$ RAYON_NUM_THREADS=24 cargo bench --package subro
+utines -- lk plk
+    Finished bench [optimized] target(s) in 0.06s
+     Running unittests src/lib.rs (target/release/deps/subroutines-e811429
+f2949b299)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 35 filtered ou
+t; finished in 0.00s
+
+     Running benches/pcs_bench.rs (target/release/deps/pcs_bench-a141e5535
+14faf82)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+; finished in 0.00s
+
+     Running benches/iop_bench.rs (target/release/deps/poly_iop_benches-80
+65376909cae2fb)
+lookup check proving time for 8 variables: 23975766 ns
+lookup check verification time for 8 variables: 458150 ns
+====================================
+lookup check proving time for 10 variables: 35124756 ns
+lookup check verification time for 10 variables: 557428 ns
+====================================
+lookup check proving time for 12 variables: 71942582 ns
+lookup check verification time for 12 variables: 559609 ns
+====================================
+lookup check proving time for 14 variables: 179607550 ns
+lookup check verification time for 14 variables: 615876 ns
+====================================
+lookup check proving time for 16 variables: 593400738 ns
+lookup check verification time for 16 variables: 669181 ns
+====================================
+lookup check proving time for 18 variables: 2093468630 ns
+lookup check verification time for 18 variables: 668912 ns
+====================================
+plookup check proving time for 8 variables: 21324043 ns
+plookup check verification time for 8 variables: 301271 ns
+====================================
+plookup check proving time for 10 variables: 41233424 ns
+plookup check verification time for 10 variables: 344178 ns
+====================================
+plookup check proving time for 12 variables: 109129538 ns
+plookup check verification time for 12 variables: 351268 ns
+====================================
+plookup check proving time for 14 variables: 360494990 ns
+plookup check verification time for 14 variables: 352348 ns
+====================================
+plookup check proving time for 16 variables: 1317422316 ns
+plookup check verification time for 16 variables: 380863 ns
+====================================
+plookup check proving time for 18 variables: 4915974585 ns
+plookup check verification time for 18 variables: 410689 ns
+====================================
+
+[nix-shell:~/LogaLookup]$ RAYON_NUM_THREADS=32 cargo bench --package hyper
+plonk -- jelly
+    Finished bench [optimized] target(s) in 0.06s
+     Running unittests src/lib.rs (target/release/deps/hyperplonk-953dcc56
+75cc8d59)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out
+; finished in 0.00s
+
+     Running benches/bench.rs (target/release/deps/hyperplonk_benches-83e5
+a95f2ae08bf3)
+start benchmark with #32 threads
+Jellyfish with 8 variables
+ 8 variables [loga]:     38917 us,    185025 us,     10023 us
+ 8 variables [p-lk]:     40710 us,    199422 us,     18097 us
+Jellyfish with 10 variables
+10 variables [loga]:     80749 us,    259596 us,     11360 us
+10 variables [p-lk]:     83088 us,    289465 us,     19119 us
+Jellyfish with 12 variables
+12 variables [loga]:    266969 us,    427840 us,     12739 us
+12 variables [p-lk]:    271305 us,    515763 us,     20366 us
+Jellyfish with 14 variables
+14 variables [loga]:    888628 us,    877798 us,     12290 us
+14 variables [p-lk]:    923255 us,   1190748 us,     21642 us
+Jellyfish with 16 variables
+16 variables [loga]:   3300438 us,   2433712 us,     12827 us
+16 variables [p-lk]:   3431916 us,   3595925 us,     22718 us
+Jellyfish with 18 variables
+18 variables [loga]:  12335198 us,   8157179 us,     14006 us
+18 variables [p-lk]:  12976971 us,  12610742 us,     23939 us
+
+
+[nix-shell:~/LogaLookup]$ RAYON_NUM_THREADS=8 cargo bench --package hyperp
+lonk -- jelly
+    Finished bench [optimized] target(s) in 0.06s
+     Running unittests src/lib.rs (target/release/deps/hyperplonk-953dcc56
+75cc8d59)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out
+; finished in 0.00s
+
+     Running benches/bench.rs (target/release/deps/hyperplonk_benches-83e5
+a95f2ae08bf3)
+start benchmark with #8 threads
+Jellyfish with 8 variables
+ 8 variables [loga]:     48716 us,     69336 us,      9148 us
+ 8 variables [p-lk]:     50873 us,     84947 us,     16988 us
+Jellyfish with 10 variables
+10 variables [loga]:    128765 us,    130942 us,     10137 us
+10 variables [p-lk]:    134023 us,    173656 us,     18452 us
+Jellyfish with 12 variables
+12 variables [loga]:    463154 us,    318762 us,     10636 us
+12 variables [p-lk]:    480936 us,    464079 us,     19297 us
+Jellyfish with 14 variables
+14 variables [loga]:   1405610 us,    896251 us,     11119 us
+14 variables [p-lk]:   1455939 us,   1349865 us,     20235 us
+Jellyfish with 16 variables
+16 variables [loga]:   5348385 us,   3127696 us,     11610 us
+16 variables [p-lk]:   5541770 us,   4830319 us,     21336 us
+Jellyfish with 18 variables
+18 variables [loga]:  20709520 us,  12135420 us,     12632 us
+18 variables [p-lk]:  21642806 us,  19291734 us,     22713 us
+
+
+[nix-shell:~/LogaLookup]$ RAYON_NUM_THREADS=16 cargo bench --package hyper
+plonk -- jelly
+    Finished bench [optimized] target(s) in 0.06s
+     Running unittests src/lib.rs (target/release/deps/hyperplonk-953dcc56
+75cc8d59)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out
+; finished in 0.00s
+
+     Running benches/bench.rs (target/release/deps/hyperplonk_benches-83e5
+a95f2ae08bf3)
+start benchmark with #16 threads
+Jellyfish with 8 variables
+ 8 variables [loga]:     34006 us,    106247 us,      8947 us
+ 8 variables [p-lk]:     35307 us,    123014 us,     16390 us
+Jellyfish with 10 variables
+10 variables [loga]:     76387 us,    165655 us,      9531 us
+10 variables [p-lk]:     79401 us,    190642 us,     17219 us
+Jellyfish with 12 variables
+12 variables [loga]:    266106 us,    311523 us,      9888 us
+12 variables [p-lk]:    271685 us,    395725 us,     18725 us
+Jellyfish with 14 variables
+14 variables [loga]:    914977 us,    729255 us,     10543 us
+14 variables [p-lk]:    952148 us,   1043225 us,     18863 us
+Jellyfish with 16 variables
+16 variables [loga]:   3459528 us,   2224942 us,     10986 us
+16 variables [p-lk]:   3595283 us,   3435442 us,     20162 us
+Jellyfish with 18 variables
+18 variables [loga]:  13567002 us,   8045320 us,     11680 us
+18 variables [p-lk]:  14405920 us,  13147686 us,     21245 us
+
+
+[nix-shell:~/LogaLookup]$ RAYON_NUM_THREADS=24 cargo bench --package hyper
+plonk -- jelly
+    Finished bench [optimized] target(s) in 0.06s
+     Running unittests src/lib.rs (target/release/deps/hyperplonk-953dcc56
+75cc8d59)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out
+; finished in 0.00s
+
+     Running benches/bench.rs (target/release/deps/hyperplonk_benches-83e5
+a95f2ae08bf3)
+start benchmark with #24 threads
+Jellyfish with 8 variables
+ 8 variables [loga]:     37504 us,    141457 us,      9690 us
+ 8 variables [p-lk]:     38361 us,    165086 us,     17057 us
+Jellyfish with 10 variables
+10 variables [loga]:     78112 us,    208258 us,     10068 us
+10 variables [p-lk]:     84519 us,    244753 us,     18412 us
+Jellyfish with 12 variables
+12 variables [loga]:    266785 us,    365798 us,     11037 us
+12 variables [p-lk]:    277301 us,    465083 us,     19573 us
+Jellyfish with 14 variables
+14 variables [loga]:    898537 us,    824655 us,     11640 us
+14 variables [p-lk]:    919968 us,   1136833 us,     20636 us
+Jellyfish with 16 variables
+16 variables [loga]:   3342987 us,   2429590 us,     12038 us
+16 variables [p-lk]:   3488357 us,   3606788 us,     21444 us
+Jellyfish with 18 variables
+18 variables [loga]:  12478039 us,   8369573 us,     12594 us
+18 variables [p-lk]:  13207306 us,  13027091 us,     22423 us
+
+
+[nix-shell:~/LogaLookup]$ tmux capture-pane -p > output.txt
+
+[nix-shell:~/LogaLookup]$ tmux capture-pane -p -S -10000 > output.txt
+^C
+
+[nix-shell:~/LogaLookup]$ rm -rf output.txt
+
+[nix-shell:~/LogaLookup]$ tmux capture-pane -p -S -10000 > output.txt
+
