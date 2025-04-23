@@ -4,7 +4,7 @@ use ark_ec::pairing::Pairing;
 use ark_ff::{One, PrimeField, Zero};
 use ark_poly::DenseMultilinearExtension;
 use dashmap::DashMap;
-use std::sync::Arc;
+use std::{sync::Arc, time::Instant};
 use transcript::IOPTranscript;
 
 mod util;
@@ -130,12 +130,20 @@ where
         PolyIOPErrors,
     > {
         // 1) Commit lookup & multiplicity polynomials.
+        let start = Instant::now();
         let f_comm = PCS::commit(pcs_param, f)?;
+        println!("Time for PCS::commit(f): {:?}", start.elapsed());
+
         transcript.append_serializable_element(b"f_comm", &f_comm)?;
 
+        let start = Instant::now();
         let m_poly =
             compute_multiplicity_poly(f, &preprocessed_table.t, &preprocessed_table.table_map)?;
+        println!("Time for compute_multiplicity_poly: {:?}", start.elapsed());
+
+        let start = Instant::now();
         let m_comm = PCS::commit(pcs_param, &m_poly)?;
+        println!("Time for PCS::commit(m_poly): {:?}", start.elapsed());
         transcript.append_serializable_element(b"m_comm", &m_comm)?;
 
         // 2) Create and commit polynomials A, B
@@ -143,17 +151,29 @@ where
         //      B(x) = 1 / (beta + f(x))
         let beta = transcript.get_and_append_challenge(b"beta")?;
 
+        let start = Instant::now();
         let a_poly = compute_a(&m_poly, &preprocessed_table.t, &beta)?;
-        let b_poly = compute_b(f, &beta)?;
+        println!("Time for compute_a: {:?}", start.elapsed()); 
 
+        let start = Instant::now();
+        let b_poly = compute_b(f, &beta)?;
+        println!("Time for compute_b: {:?}", start.elapsed());
+
+        let start = Instant::now();
         let a_comm = PCS::commit(pcs_param, &a_poly)?;
+        println!("Time for PCS::commit(a_poly): {:?}", start.elapsed());
+
+        let start = Instant::now();
         let b_comm = PCS::commit(pcs_param, &b_poly)?;
+        println!("Time for PCS::commit(b_poly): {:?}", start.elapsed());
 
         transcript.append_serializable_element(b"a_comm", &a_comm)?;
         transcript.append_serializable_element(b"b_comm", &b_comm)?;
 
         // 3) Build batched virtual polynomial p + alpha * q
         let alpha = transcript.get_and_append_challenge(b"alpha")?;
+
+        let start = Instant::now();
         let pq = build_pq_virtual(
             &a_poly,
             &b_poly,
@@ -163,13 +183,20 @@ where
             &alpha,
             &beta,
         )?;
+        println!("Time for build_pq_virtual: {:?}", start.elapsed());
 
+        let start = Instant::now();
         let zc_proof = <Self as ZeroCheck<E::ScalarField>>::prove(&pq, transcript)?;
+        println!("Time for ZeroCheck::prove: {:?}", start.elapsed());
 
         // 5) SumCheck for L(x) = A(x) - B(x)
+        let start = Instant::now();
         let l = build_l_virtual(&a_poly, &b_poly)?;
+        println!("Time for build_l_virtual: {:?}", start.elapsed());
 
+        let start = Instant::now();
         let sc_proof = <Self as SumCheck<E::ScalarField>>::prove(&l, transcript)?;
+        println!("Time for SumCheck::prove: {:?}", start.elapsed());
 
         Ok((
             LookupCheckProof {
