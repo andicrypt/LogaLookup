@@ -1,0 +1,66 @@
+\begin{table*}[ht]
+\centering
+
+\begin{tabular}{c c c r r r r r r}
+\hline 
+ & & & \multicolumn{6}{c}{\textbf{\small Number of constraints}} \\
+
+\textbf{\small \#Ths.} & \textbf{\small Operation} & \textbf{\small Sch.} & $\mathbf{2^8}$ & $\mathbf{2^{10}}$ & $\mathbf{2^{12}}$ & $\mathbf{2^{14}}$ & $\mathbf{2^{16}}$ & $\mathbf{2^{18}}$ \\ \hline
+
+\multirow{4}{0em}{8} & \multirow{2}{7em}{\small Prove (s)} & \small{LG} & 0.01 & 0.03 & 0.08 & 0.22 & 0.82 & \textbf{3.22} \\ 
+ 
+& & \small{PL} & 0.02 & 0.05 & 0.17 & 0.49 & 1.94 & 8.03  \\ \cline{2-9}
+& \multirow{2}{7em}{\small Verify (ms)} & \small{LG} & 0.25 & 0.32 & 0.35 & 0.40 & 0.43 & 0.49   \\
+& & \small{PL} & 0.19 & 0.22 & 0.24 & 0.26 & 0.30 & 0.33  \\ \hline
+
+\multirow{4}{0em}{16} & \multirow{2}{7em}{\small Prove (s)} & \small{LG} & 0.02 & 0.03 & 0.06 & 0.17 & 0.59 & \textbf{2.29}  \\ 
+ 
+& & \small{PL} & 0.02 & 0.04 & 0.11 & 0.36 & 1.37 & 5.76  \\ \cline{2-9}
+& \multirow{2}{7em}{\small Verify (ms)} & \small{LG} & 0.41 & 0.46 & 0.46 & 0.47 & 0.50 & 0.53  \\
+& & \small{PL} & 0.25 & 0.27 & 0.29 & 0.29 & 0.30 & 0.33  \\ \hline
+
+% \multirow{4}{0em}{24} & \multirow{2}{7em}{\small Prove (s)} & \small{LG} & 0.02 & 0.04 & 0.07 & 0.18 & 0.59 & \textbf{2.09}  \\ 
+ 
+% & & \small{PL} & 0.02 & 0.04 & 0.11 & 0.36 & 1.32 & 4.92  \\ \cline{2-9}
+% & \multirow{2}{7em}{\small Verify (ms)} & \small{LG} & 0.46 & 0.56 & 0.56 & 0.62 & 0.67 & 0.67  \\
+% & & \small{PL} & 0.30 & 0.34 & 0.35 & 0.35 & 0.38 & 0.41  \\ \hline
+
+\end{tabular}
+\caption[Lookup subroutine comparison]{\small Subroutine Performance Across Threads and Constraint Sizes}
+\label{table-benchmark-lookup}
+\end{table*}
+
+
+
+
+
+\begin{table*}[ht]
+\centering
+\begin{tabular}{c c c r r r r r r}
+\hline 
+ & & & \multicolumn{6}{c}{\textbf{\small Number of constraints}} \\
+
+\textbf{\small \#Ths. } & \textbf{\small Operation} & \textbf{\small Sch.} & $\mathbf{2^8}$ & $\mathbf{2^{10}}$ & $\mathbf{2^{12}}$ & $\mathbf{2^{14}}$ & $\mathbf{2^{16}}$ & $\mathbf{2^{18}}$ \\ \hline
+
+\multirow{6}{0em}{8} & \multirow{2}{7em}{Preprocess (s)} & \small{LG} & 0.05 & 0.13 & 0.46 & 1.41 & 5.35 & 20.71  \\
+& & \small{PL} & 0.05 & 0.13 & 0.48 & 1.46 & 5.54 & 21.64  \\ \cline{2-9}
+
+& \multirow{2}{7em}{\small Prove (s)} & \small{LG} & 0.07 & 0.13 & 0.32 & 0.90 & 3.13 & \textbf{12.14}  \\
+& & \small{PL} & 0.08 & 0.17 & 0.46 & 1.35 & 4.83 & 19.29  \\ \cline{2-9} 
+
+% & \multirow{2}{7em}{\small Verify (s)} & \small{LG} & 0.01 & 0.01 & 0.01 & 0.01 & 0.01 & 0.01  \\
+% & & \small{PL} & 0.02 & 0.02 & 0.02 & 0.02 & 0.02 & 0.02  \\ \hline
+
+\multirow{6}{0em}{16} & \multirow{2}{7em}{Preprocess (s)} & \small{LG} & 0.03 & 0.08 & 0.27 & 0.91 & 3.46 & 13.57  \\
+& & \small{PL} & 0.04 & 0.08 & 0.27 & 0.95 & 3.60 & 14.41  \\ \cline{2-9}
+
+& \multirow{2}{7em}{\small Prove (s)} & \small{LG} & 0.11 & 0.17 & 0.31 & 0.73 & 2.22 & \textbf{8.05}  \\ 
+& & \small{PL} & 0.12 & 0.19 & 0.40 & 1.04 & 3.44 & 13.15  \\ \cline{2-9} 
+
+% & \multirow{2}{7em}{\small Verify (s)} & \small{LG} & 0.01 & 0.01 & 0.01 & 0.01 & 0.01 & 0.01  \\
+% & & \small{PL} & 0.02 & 0.02 & 0.02 & 0.02 & 0.02 & 0.02  \\ \hline
+
+\end{tabular}
+\caption[Lookup-integrated SNARKs (Jellyfish gate) comparison]{\small Performance of HyperPlonk with Lookup and Jellyfish Gate Across Constraint Sizes}
+\label{table-benchmark-integration-jelly}
+\end{table*}
