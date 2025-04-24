@@ -2,7 +2,7 @@ use crate::{PolyIOP, PolyIOPErrors, PolynomialCommitmentScheme, ProductCheck};
 use arithmetic::merge_polynomials;
 use ark_ec::pairing::Pairing;
 use ark_poly::DenseMultilinearExtension;
-use std::{sync::Arc, time::Instant};
+use std::sync::Arc;
 use transcript::IOPTranscript;
 
 pub mod utils;
@@ -138,48 +138,27 @@ where
 
         // h is a vector
         // num elements: 2^{mu + 1} - 1
-        let start = Instant::now();
         let h = compute_h(f, &preprocessed_table.table, &preprocessed_table.table_map)?;
-        println!("Time for compute_h: {:?}", start.elapsed());
 
         // num vars: nv + 1
-        let start = Instant::now();
         let h_emb = embed(&h, num_vars + 1)?;
-        println!("Time for embed(h): {:?}", start.elapsed());
-
-        let start = Instant::now();
         let h_comm = PCS::commit(pcs_param, &h_emb)?;
-        println!("Time for PCS::commit(h_emb): {:?}", start.elapsed()); 
-
         transcript.append_serializable_element(b"h_comm", &h_comm)?;
 
-        let start = Instant::now();
         let f_comm = PCS::commit(pcs_param, f)?;
-        println!("Time for PCS::commit(f): {:?}", start.elapsed());
-
         transcript.append_serializable_element(b"f_comm", &f_comm)?;
 
         // polynomial g1 = merge(f,t)
         // num vars: nv + 1
-        let start = Instant::now();
         let g1 = merge_polynomials(&[f.clone(), preprocessed_table.t.clone()])?;
-        println!("Time for merge_polynomials(g1): {:?}", start.elapsed());
 
         // polynomial g2 = merge(f, t_delta)
         // num vars: nv + 1
-        let start = Instant::now();
         let g2 = merge_polynomials(&[f.clone(), preprocessed_table.t_delta.clone()])?;
-        println!("Time for merge_polynomials(g2): {:?}", start.elapsed());
 
         // num vars: nv + 1
-        let start = Instant::now();
         let h_delta = compute_poly_delta(&h_emb, num_vars + 1)?;
-        println!("Time for compute_poly_delta: {:?}", start.elapsed());
-
-        let start = Instant::now();
         let h_delta_comm = PCS::commit(pcs_param, &h_delta)?;
-        println!("Time for PCS::commit(h_delta): {:?}", start.elapsed());
-
         transcript.append_serializable_element(b"h_delta_comm", &h_delta_comm)?;
 
         let beta = transcript.get_and_append_challenge(b"beta")?;
@@ -190,7 +169,6 @@ where
 
         // combine g1 evals with g2 evals
         // num evals: (1 << (nv + 1))
-        let start = Instant::now();
         let numerator_evals = g1
             .evaluations
             .iter()
@@ -201,11 +179,9 @@ where
             num_vars + 1,
             numerator_evals,
         ));
-        println!("Time for constructing numerator: {:?}", start.elapsed());
 
         // combine h_emb evals with h_delta evals
         // num evals: (1 << (nv + 1))
-        let start = Instant::now();
         let denominator_evals = h_emb
             .evaluations
             .iter()
@@ -217,16 +193,13 @@ where
             num_vars + 1,
             denominator_evals,
         ));
-        println!("Time for constructing denominator: {:?}", start.elapsed());
 
-        let start = Instant::now();
         let (proof, prod_poly, frac_poly) = <Self as ProductCheck<E, PCS>>::prove(
             pcs_param,
             &[numerator],
             &[denominator],
             transcript,
         )?;
-        println!("Time for ProductCheck::prove: {:?}", start.elapsed());
 
         Ok((
             PlookupCheckProof {
@@ -388,10 +361,5 @@ mod test {
     #[test]
     fn test_15() -> Result<(), PolyIOPErrors> {
         test_plookup_check(15)
-    }
-
-    #[test]
-    fn test_9() -> Result<(), PolyIOPErrors> {
-        test_plookup_check(9)
     }
 }

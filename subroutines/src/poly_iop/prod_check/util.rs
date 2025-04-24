@@ -11,7 +11,7 @@ use arithmetic::{get_index, VirtualPolynomial};
 use ark_ff::{batch_inversion, PrimeField};
 use ark_poly::DenseMultilinearExtension;
 use ark_std::{end_timer, start_timer};
-use std::{sync::Arc, time::Instant};
+use std::sync::Arc;
 use transcript::IOPTranscript;
 
 /// Compute multilinear fractional polynomial s.t. frac(x) = f1(x) * ... * fk(x)
@@ -131,11 +131,6 @@ pub(super) fn prove_zero_check<F: PrimeField>(
 
     // compute p1(x) = (1-x1) * frac(x2, ..., xn, 0) + x1 * prod(x2, ..., xn, 0)
     // compute p2(x) = (1-x1) * frac(x2, ..., xn, 1) + x1 * prod(x2, ..., xn, 1)
-    println!("");
-    println!("");
-    println!("");
-
-    let start_p12 = Instant::now();
     let mut p1_evals = vec![F::zero(); 1 << num_vars];
     let mut p2_evals = vec![F::zero(); 1 << num_vars];
     for x in 0..1 << num_vars {
@@ -148,57 +143,36 @@ pub(super) fn prove_zero_check<F: PrimeField>(
             p2_evals[x] = prod_x.evaluations[x1];
         }
     }
-    println!("Time to compute p1_evals and p2_evals: {:?}", start_p12.elapsed());
-
-    let start_p1 = Instant::now();
     let p1 = Arc::new(DenseMultilinearExtension::from_evaluations_vec(
         num_vars, p1_evals,
     ));
-    println!("Time to build p1 MLE: {:?}", start_p1.elapsed());
-
-    let start_p2 = Instant::now();
     let p2 = Arc::new(DenseMultilinearExtension::from_evaluations_vec(
         num_vars, p2_evals,
     ));
-    println!("Time to build p2 MLE: {:?}", start_p2.elapsed());
 
     // compute Q(x)
     // prod(x)
-    let start_q = Instant::now();
     let mut q_x = VirtualPolynomial::new_from_mle(prod_x, F::one());
-    println!("Time to init q_x with prod_x: {:?}", start_q.elapsed());
 
     //   prod(x)
     // - p1(x) * p2(x)
-    let start_q1 = Instant::now();
     q_x.add_mle_list([p1, p2], -F::one())?;
-    println!("Time to subtract p1*p2: {:?}", start_q1.elapsed());
 
     //   prod(x)
     // - p1(x) * p2(x)
     // + alpha * frac(x) * g1(x) * ... * gk(x)
-    let start_q2 = Instant::now();
     let mut mle_list = gxs.to_vec();
     mle_list.push(frac_poly.clone());
     q_x.add_mle_list(mle_list, *alpha)?;
-    println!("Time to add frac*gxs: {:?}", start_q2.elapsed());
 
     //   prod(x)
     // - p1(x) * p2(x)
     // + alpha * frac(x) * g1(x) * ... * gk(x)
     // - alpha * f1(x) * ... * fk(x)]
-    let start_q3 = Instant::now();
     q_x.add_mle_list(fxs.to_vec(), -*alpha)?;
-    println!("Time to subtract fxs: {:?}", start_q3.elapsed());
 
-    let start_zc = Instant::now();
     let iop_proof = <PolyIOP<F> as ZeroCheck<F>>::prove(&q_x, transcript)?;
-    println!("Time for ZeroCheck::prove: {:?}", start_zc.elapsed());
 
-    println!("");
-    println!("");
-    println!("");
-    
     end_timer!(start);
     Ok((iop_proof, q_x))
 }
