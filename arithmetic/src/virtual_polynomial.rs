@@ -17,7 +17,7 @@ use ark_std::{
     start_timer,
 };
 use rayon::prelude::*;
-use std::{cmp::max, collections::HashMap, marker::PhantomData, ops::Add, ops::Mul, sync::Arc};
+use std::{cmp::max, collections::HashMap, marker::PhantomData, ops::Add, sync::Arc};
 
 #[rustfmt::skip]
 /// A virtual polynomial is a sum of products of multilinear polynomials;
@@ -90,28 +90,6 @@ impl<F: PrimeField> Add for &VirtualPolynomial<F> {
         res
     }
 }
-
-impl<F: PrimeField> Mul<F> for &VirtualPolynomial<F> {
-    type Output = VirtualPolynomial<F>;
-    fn mul(self, scalar: F) -> Self::Output {
-        let start = start_timer!(|| "virtual poly scalar mul");
-        let mut res = self.clone();
-        for (coeff, _) in res.products.iter_mut() {
-            *coeff *= scalar; // scale the coefficient
-        }
-
-        end_timer!(start);
-        res
-    }
-}
-
-impl<F: PrimeField> Mul<F> for VirtualPolynomial<F> {
-    type Output = VirtualPolynomial<F>;
-    fn mul(self, scalar: F) -> Self::Output {
-        &self * scalar // just delegate to your existing code
-    }
-}
-
 
 // TODO: convert this into a trait
 impl<F: PrimeField> VirtualPolynomial<F> {

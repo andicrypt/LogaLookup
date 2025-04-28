@@ -33,7 +33,7 @@ where
 {
     // PCS commit for witnesses
     pub witness_commits: Vec<PCS::Commitment>,
-    pub batch_openings: Vec<PCS::BatchProof>,
+    pub batch_openings: PCS::BatchProof,
     // =======================================================================
     // IOP proofs
     // =======================================================================

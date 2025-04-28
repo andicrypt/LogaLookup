@@ -14,6 +14,7 @@ pub use crate::poly_iop::{
     prod_check::ProductCheck,
     structs::IOPProof,
     sum_check::SumCheck,
+    utils::*,
     zero_check::ZeroCheck,
     PolyIOP,
 };
