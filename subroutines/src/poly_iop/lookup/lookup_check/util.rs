@@ -163,35 +163,53 @@ pub(super) fn compute_b<F: PrimeField>(
     )))
 }
 
-/// Compute A(x) * (beta + t(x)) - m(x) + alpha * (B(x) * (beta + f(x)) - 1)
-pub fn build_pq_virtual<F: PrimeField>(
+pub fn build_h_hat<F: PrimeField>(
+    h: &Arc<DenseMultilinearExtension<F>>,
+    r: &[F],
+) -> Result<VirtualPolynomial<F>, PolyIOPErrors> {
+    let h_poly = VirtualPolynomial::new_from_mle(h, F::one());
+    let h_hat = h_poly.build_f_hat(r.as_ref())?;
+    Ok(h_hat)
+}
+
+pub fn compute_h<F: PrimeField>(
     a: &Arc<DenseMultilinearExtension<F>>,
     b: &Arc<DenseMultilinearExtension<F>>,
     f: &Arc<DenseMultilinearExtension<F>>,
     t: &Arc<DenseMultilinearExtension<F>>,
     m: &Arc<DenseMultilinearExtension<F>>,
-    alpha: &F,
     beta: &F,
-) -> Result<VirtualPolynomial<F>, PolyIOPErrors> {
+) -> Result<Arc<DenseMultilinearExtension<F>>, PolyIOPErrors> {
+    // ) -> Result<VirtualPolynomial<F>, PolyIOPErrors> {
     let num_vars = a.num_vars();
-    let mut vp = VirtualPolynomial::new(num_vars);
 
-    vp.add_mle_list([Arc::clone(a)], *beta)?;
-    vp.add_mle_list([Arc::clone(a), Arc::clone(t)], F::one())?;
-    vp.add_mle_list([Arc::clone(m)], -F::one())?;
+    // compute p(x) = A(x) * (beta + t(x)) - m(x)
+    // compute q(x) = B(x) * (beta + f(x)) - 1
+    let mut p_evals = vec![F::zero(); 1 << num_vars];
+    let mut q_evals = vec![F::zero(); 1 << num_vars];
+    for x in 0..1 << num_vars {
+        p_evals[x] = a.evaluations[x] * (*beta + t.evaluations[x]) - m.evaluations[x];
+        q_evals[x] = b.evaluations[x] * (*beta + f.evaluations[x]) - F::one();
+    }
 
-    vp.add_mle_list([Arc::clone(b)], *alpha * beta)?;
-    vp.add_mle_list([Arc::clone(b), Arc::clone(f)], *alpha)?;
+    // build h(X,x) = (1-X) * p(x) + X * q(x)
+    let size_h = 1 << (num_vars + 1);
+    let mut h_evals = vec![F::zero(); size_h];
 
-    vp.add_mle_list(
-        [Arc::new(DenseMultilinearExtension::from_evaluations_vec(
-            num_vars,
-            vec![*alpha; 1 << num_vars],
-        ))],
-        -F::one(),
-    )?;
+    for x in 0..size_h {
+        let highest_bit = (x >> num_vars) & 1;
+        let lower_bits = x & ((1 << num_vars) - 1);
 
-    Ok(vp)
+        if highest_bit == 0 {
+            h_evals[x] = p_evals[lower_bits];
+        } else {
+            h_evals[x] = q_evals[lower_bits];
+        }
+    }
+
+    Ok(Arc::new(DenseMultilinearExtension::from_evaluations_vec(
+        num_vars+1, h_evals,
+    )))
 }
 
 /// Compute virtual polynomial
@@ -248,19 +266,54 @@ pub fn build_q_virtual<F: PrimeField>(
 
 /// Compute virtual polynomial
 ///     L(x) = A(x) - B(x)
-pub fn build_l_virtual<F: PrimeField>(
+pub fn build_l_virtual_lifted<F: PrimeField>(
     a: &Arc<DenseMultilinearExtension<F>>,
     b: &Arc<DenseMultilinearExtension<F>>,
 ) -> Result<VirtualPolynomial<F>, PolyIOPErrors> {
     assert!(
-        a.num_vars() == b.num_vars,
-        "All polynomial must have same the same number of variables"
+        a.num_vars() == b.num_vars(),
+        "All polynomials must have the same number of variables"
     );
 
-    let mut vp = VirtualPolynomial::new_from_mle(a, F::one());
-    vp.add_mle_list(vec![Arc::clone(b)], -F::one())?;
+    let num_vars = a.num_vars();
+    let new_num_vars = num_vars + 1;
+
+    // Extend MLEs to n+1 variables (duplicate evaluations to ignore x_{n+1})
+    let a_extended = extend_mle(a, new_num_vars)?;
+    let b_extended = extend_mle(b, new_num_vars)?;
+
+    // Create VirtualPolynomial with extended MLEs
+    let mut vp = VirtualPolynomial::new_from_mle(&a_extended, F::one());
+    vp.add_mle_list(vec![b_extended], -F::one())?;
 
     Ok(vp)
+}
+
+/// Helper function to extend an MLE to one additional variable
+fn extend_mle<F: PrimeField>(
+    mle: &Arc<DenseMultilinearExtension<F>>,
+    new_num_vars: usize,
+) -> Result<Arc<DenseMultilinearExtension<F>>, PolyIOPErrors> {
+    let old_num_vars = mle.num_vars();
+    assert!(
+        new_num_vars > old_num_vars,
+        "New number of variables must be greater"
+    );
+
+    // Create new evaluations: duplicate the original evaluations
+    let old_size = 1 << old_num_vars;
+    let new_size = 1 << new_num_vars;
+    let mut new_evals = Vec::with_capacity(new_size);
+
+    // Copy evaluations for x_{n+1} = 0 and x_{n+1} = 1
+    for _ in 0..(new_size / old_size) {
+        new_evals.extend_from_slice(&mle.evaluations);
+    }
+
+    Ok(Arc::new(DenseMultilinearExtension::from_evaluations_vec(
+        new_num_vars,
+        new_evals,
+    )))
 }
 
 #[cfg(test)]
