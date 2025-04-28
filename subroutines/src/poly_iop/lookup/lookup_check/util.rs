@@ -163,8 +163,7 @@ pub(super) fn compute_b<F: PrimeField>(
     )))
 }
 
-/// Compute A(x) * (beta + t(x)) - m(x) + alpha * (B(x) * (beta + f(x)) - 1)
-pub fn build_pq_virtual<F: PrimeField>(
+pub fn build_h_virtual<F: PrimeField>(
     a: &Arc<DenseMultilinearExtension<F>>,
     b: &Arc<DenseMultilinearExtension<F>>,
     f: &Arc<DenseMultilinearExtension<F>>,

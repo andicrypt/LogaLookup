@@ -39,13 +39,14 @@ where
             Self::MultilinearExtension,
             Self::MultilinearExtension,
             Self::MultilinearExtension,
+            Self::VirtualPolynomial,
+            Self::VirtualPolynomial,
         ),
         PolyIOPErrors,
     >;
 
     fn verify(
         proof: &Self::LookupCheckProof,
-        zc_aux_info: &VPAuxInfo<E::ScalarField>,
         sc_aux_info: &VPAuxInfo<E::ScalarField>,
         transcript: &mut Self::Transcript,
     ) -> Result<Self::LookupCheckSubClaim, PolyIOPErrors>;
@@ -55,12 +56,14 @@ where
 /// - A zero check subclaim
 /// - A value beta
 pub struct LookupCheckSubClaim<F: PrimeField, ZC: ZeroCheck<F>> {
-    pub zero_check_subclaim: ZC::ZeroCheckSubClaim,
-
+    /// Sumcheck subclaim
     pub sum_check_subclaim: <ZC as SumCheck<F>>::SumCheckSubClaim,
 
-    /// Challenges beta and alpha
-    pub challenges: (F, F),
+    /// Challenges beta, alpha, gamma
+    pub challenges: (F, F, F),
+
+    /// r challenge for zerocheck identity checking
+    pub rchallenges: Vec<F>,
 }
 
 pub struct LookupCheckProof<E, PCS, ZC>
@@ -69,7 +72,6 @@ where
     PCS: PolynomialCommitmentScheme<E>,
     ZC: ZeroCheck<E::ScalarField>,
 {
-    pub zc_proof: ZC::ZeroCheckProof,
     pub sc_proof: <ZC as SumCheck<E::ScalarField>>::SumCheckProof,
     pub f_comm: PCS::Commitment,
     pub m_comm: PCS::Commitment,
@@ -126,10 +128,12 @@ where
             Self::MultilinearExtension,
             Self::MultilinearExtension,
             Self::MultilinearExtension,
+            Self::VirtualPolynomial,
+            Self::VirtualPolynomial,
         ),
         PolyIOPErrors,
     > {
-        // 1) Commit lookup & multiplicity polynomials.
+        // Commit lookup & multiplicity polynomials.
         let f_comm = PCS::commit(pcs_param, f)?;
         transcript.append_serializable_element(b"f_comm", &f_comm)?;
 
@@ -138,7 +142,7 @@ where
         let m_comm = PCS::commit(pcs_param, &m_poly)?;
         transcript.append_serializable_element(b"m_comm", &m_comm)?;
 
-        // 2) Create and commit polynomials A, B
+        // Create and commit polynomials A, B
         //      A(x) = m(x) / (beta + t(x))
         //      B(x) = 1 / (beta + f(x))
         let beta = transcript.get_and_append_challenge(b"beta")?;
@@ -152,9 +156,9 @@ where
         transcript.append_serializable_element(b"a_comm", &a_comm)?;
         transcript.append_serializable_element(b"b_comm", &b_comm)?;
 
-        // 3) Build batched virtual polynomial p + alpha * q
+        // Build batched virtual polynomial p + alpha * q
         let alpha = transcript.get_and_append_challenge(b"alpha")?;
-        let pq = build_pq_virtual(
+        let h_poly_virtual = build_h_virtual(
             &a_poly,
             &b_poly,
             f,
@@ -164,16 +168,23 @@ where
             &beta,
         )?;
 
-        let zc_proof = <Self as ZeroCheck<E::ScalarField>>::prove(&pq, transcript)?;
+        // Build H_hat(X) = M(X) * eq_r(X)
+        // where eq_r(X) = r_i * X_i + (1 - r_i) * (1 - X_i)
+        let r = transcript.get_and_append_challenge_vectors(b"0check r", f.num_vars)?;
+        let h_hat_poly_virtual = h_poly_virtual.build_f_hat(r.as_ref())?;
 
-        // 5) SumCheck for L(x) = A(x) - B(x)
-        let l = build_l_virtual(&a_poly, &b_poly)?;
+        // Build L(X) = A(X) - B(X) over boolean hypercube
+        let l_poly_virtual = build_l_virtual(&a_poly, &b_poly)?;
 
-        let sc_proof = <Self as SumCheck<E::ScalarField>>::prove(&l, transcript)?;
+        // Batch two sumcheck on H_hat and L by using
+        // randomly sampled challenge gamma from verifier
+        let gamma = transcript.get_and_append_challenge(b"gamma")?;
+        let t_poly_virtual = &h_hat_poly_virtual + &(&l_poly_virtual * gamma);
+
+        let sc_proof = <Self as SumCheck<E::ScalarField>>::prove(&t_poly_virtual, transcript)?;
 
         Ok((
             LookupCheckProof {
-                zc_proof,
                 sc_proof,
                 f_comm,
                 m_comm,
@@ -183,12 +194,13 @@ where
             m_poly,
             a_poly,
             b_poly,
+            h_poly_virtual,
+            l_poly_virtual,
         ))
     }
 
     fn verify(
         proof: &Self::LookupCheckProof,
-        zc_aux_info: &VPAuxInfo<E::ScalarField>,
         sc_aux_info: &VPAuxInfo<E::ScalarField>,
         transcript: &mut Self::Transcript,
     ) -> Result<Self::LookupCheckSubClaim, PolyIOPErrors> {
@@ -201,8 +213,11 @@ where
         transcript.append_serializable_element(b"b_comm", &proof.b_comm)?;
 
         let alpha = transcript.get_and_append_challenge(b"alpha")?;
-        let zc_sub_claim =
-            <Self as ZeroCheck<E::ScalarField>>::verify(&proof.zc_proof, zc_aux_info, transcript)?;
+
+        let length = sc_aux_info.num_variables;
+        let r = transcript.get_and_append_challenge_vectors(b"0check r", length)?;
+
+        let gamma = transcript.get_and_append_challenge(b"gamma")?;
 
         let sc_sub_claim = <Self as SumCheck<E::ScalarField>>::verify(
             E::ScalarField::zero(),
@@ -212,9 +227,9 @@ where
         )?;
 
         Ok(LookupCheckSubClaim {
-            zero_check_subclaim: zc_sub_claim,
             sum_check_subclaim: sc_sub_claim,
-            challenges: (beta, alpha),
+            challenges: (beta, alpha, gamma),
+            rchallenges: r,
         })
     }
 }
@@ -224,89 +239,20 @@ mod test {
     use super::LookupCheck;
     use super::LookupCheckSubClaim;
     use crate::poly_iop::lookup::structs::LogaPreprocessedTable;
-    use crate::poly_iop::zero_check::ZeroCheckSubClaim;
     use crate::{
         pcs::{prelude::MultilinearKzgPCS, PolynomialCommitmentScheme},
         poly_iop::{errors::PolyIOPErrors, PolyIOP},
     };
-    use arithmetic::VPAuxInfo;
+    use arithmetic::{eq_eval, VPAuxInfo};
     use ark_bls12_381::{Bls12_381, Fr};
     use ark_ec::pairing::Pairing;
-    use ark_ff::PrimeField;
+    use ark_ff::One;
     use ark_poly::{DenseMultilinearExtension, MultilinearExtension};
+    use ark_std::rand::Rng;
     use ark_std::test_rng;
 
     use std::marker::PhantomData;
     use std::sync::Arc;
-
-    // A(x) = m(x) / (beta + t(x))
-    // B(x) = 1 / (beta + f())
-    fn check_a_b<F>(
-        a_poly: &Arc<DenseMultilinearExtension<F>>,
-        b_poly: &Arc<DenseMultilinearExtension<F>>,
-        t: &Arc<DenseMultilinearExtension<F>>,
-        f: &Arc<DenseMultilinearExtension<F>>,
-        m_poly: &Arc<DenseMultilinearExtension<F>>,
-        beta: F,
-    ) where
-        F: PrimeField,
-    {
-        let mut flag = true;
-        assert!(
-            a_poly.num_vars == b_poly.num_vars,
-            "A and B must have the same num vars"
-        );
-
-        let num_vars = a_poly.num_vars;
-        for i in 0..1 << num_vars {
-            // check A eval at index i
-            let nom_a = m_poly.evaluations[i];
-            let denom_a = beta + t.evaluations[i];
-            if a_poly.evaluations[i] * denom_a != nom_a {
-                flag = false;
-                break;
-            }
-
-            // check B eval at index i
-            let nom_b = F::one();
-            let denom_b = beta + f.evaluations[i];
-            if b_poly.evaluations[i] * denom_b != nom_b {
-                flag = false;
-                break;
-            }
-        }
-        assert!(flag);
-    }
-
-    // p + alpha * q = 0
-    #[allow(clippy::too_many_arguments)]
-    fn check_p_q<F>(
-        zc_subclaim: &ZeroCheckSubClaim<F>,
-        a_poly: &Arc<DenseMultilinearExtension<F>>,
-        b_poly: &Arc<DenseMultilinearExtension<F>>,
-        t: &Arc<DenseMultilinearExtension<F>>,
-        f: &Arc<DenseMultilinearExtension<F>>,
-        m_poly: &Arc<DenseMultilinearExtension<F>>,
-        beta: F,
-        alpha: F,
-    ) where
-        F: PrimeField,
-    {
-        let point = &zc_subclaim.point;
-
-        // p(x) = A(x) * (beta + t(x)) - m(x)
-        let p_at_point = a_poly.evaluate(point).unwrap() * (beta + t.evaluate(point).unwrap())
-            - m_poly.evaluate(point).unwrap();
-
-        // q(x) = B(x) * (beta + f(x)) - 1
-        let q_at_point =
-            b_poly.evaluate(point).unwrap() * (beta + f.evaluate(point).unwrap()) - F::one();
-
-        assert!(
-            p_at_point + alpha * q_at_point == zc_subclaim.expected_evaluation,
-            "p and q does not pass zero-check"
-        );
-    }
 
     fn test_lookup_check_helper<E, PCS>(
         f: &Arc<DenseMultilinearExtension<E::ScalarField>>,
@@ -324,7 +270,7 @@ mod test {
         let mut transcript = <PolyIOP<E::ScalarField> as LookupCheck<E, PCS>>::init_transcript();
         transcript.append_message(b"testing", b"initializing transcript for testing")?;
 
-        let (proof, m_poly, a_poly, b_poly) =
+        let (proof, m_poly, a_poly, b_poly, h_poly_virtual, l_poly_virtual) =
             <PolyIOP<E::ScalarField> as LookupCheck<E, PCS>>::prove(
                 pcs_param,
                 f,
@@ -336,58 +282,46 @@ mod test {
         let mut transcript = <PolyIOP<E::ScalarField> as LookupCheck<E, PCS>>::init_transcript();
         transcript.append_message(b"testing", b"initializing transcript for testing")?;
 
-        // max_degree = 2, because p(A,m,t) + alpha * q(B,f)
-        let zc_aux_info: VPAuxInfo<E::ScalarField> = VPAuxInfo {
-            max_degree: 2,
-            num_variables: f.num_vars(),
-            phantom: PhantomData::default(),
-        };
-
-        // max_degree = 1, because A - B has a max degree of each variable is 1
+        // max_degree = 3, num_var = mu
         let sc_aux_info: VPAuxInfo<E::ScalarField> = VPAuxInfo {
-            max_degree: 1,
+            max_degree: 3,
             num_variables: f.num_vars(),
             phantom: PhantomData::default(),
         };
 
         let LookupCheckSubClaim {
-            zero_check_subclaim: zero_check_sub_claim, // p + alpha*q = 0
-            sum_check_subclaim: sum_check_sub_claim,
+            sum_check_subclaim: sum_subclaim,
             challenges,
+            rchallenges,
         } = <PolyIOP<E::ScalarField> as LookupCheck<E, PCS>>::verify(
             &proof,
-            &zc_aux_info,
             &sc_aux_info,
             &mut transcript,
         )?;
 
-        check_a_b::<E::ScalarField>(
-            &a_poly,
-            &b_poly,
-            &preprocessed_table.t,
-            f,
-            &m_poly,
-            challenges.0,
-        );
+        let a_eval = a_poly.evaluate(&sum_subclaim.point).unwrap();
+        let b_eval = b_poly.evaluate(&sum_subclaim.point).unwrap();
+        let m_eval = m_poly.evaluate(&sum_subclaim.point).unwrap();
+        let t_eval = preprocessed_table.t.evaluate(&sum_subclaim.point).unwrap();
+        let f_eval = f.evaluate(&sum_subclaim.point).unwrap();
+        let h_eval = h_poly_virtual.evaluate(&sum_subclaim.point).unwrap();
+        let l_eval = l_poly_virtual.evaluate(&sum_subclaim.point).unwrap();
+        let (beta, alpha, gamma) = challenges;
 
-        check_p_q(
-            &zero_check_sub_claim,
-            &a_poly,
-            &b_poly,
-            &preprocessed_table.t,
-            f,
-            &m_poly,
-            challenges.0,
-            challenges.1,
+        let eq_x_r_eval = eq_eval(&sum_subclaim.point, &rchallenges)?;
+        let h_hat_eval = h_eval * eq_x_r_eval;
+
+        assert_eq!(
+            h_hat_eval + gamma * l_eval,
+            sum_subclaim.expected_evaluation,
+            "h_hat_eval + gamma * (a_eval - b_eval) == sum_subclaim.expected_evaluation"
         );
 
         assert_eq!(
-            a_poly.evaluate(&sum_check_sub_claim.point).unwrap()
-                - b_poly.evaluate(&sum_check_sub_claim.point).unwrap(),
-            sum_check_sub_claim.expected_evaluation,
-            "sumcheck on A - B not satisfied",
+            h_eval,
+            a_eval * (beta + t_eval) - m_eval + alpha * (b_eval * (beta + f_eval) - E::ScalarField::one()),
+            "h_eval = a_eval * (beta + t_eval) - m_eval + alpha * (b_eval * (beta + f_eval) - F::one())"
         );
-
         Ok(())
     }
 
@@ -429,18 +363,83 @@ mod test {
         Ok(())
     }
 
+    fn test_lookup_check_bad_path(num_vars: usize) -> Result<(), PolyIOPErrors> {
+        let mut rng = test_rng();
+
+        // 1) Generate SRS
+        let srs =
+            MultilinearKzgPCS::<Bls12_381>::gen_srs_for_testing(&mut rng, num_vars + 1).unwrap();
+
+        let (pcs_param, _) =
+            MultilinearKzgPCS::<Bls12_381>::trim(srs, None, Some(num_vars + 1)).unwrap();
+
+        // 2) Generate lookup table
+        let half_n = 1 << (num_vars - 1);
+
+        let half_table = DenseMultilinearExtension::<Fr>::rand(num_vars - 1, &mut rng);
+
+        let mut table = half_table.evaluations;
+
+        table.append(&mut vec![table[half_n - 1]; half_n]);
+
+        let preprocessed_table = <PolyIOP<Fr> as LookupCheck<
+            Bls12_381,
+            MultilinearKzgPCS<Bls12_381>,
+        >>::preprocess_table(&pcs_param, num_vars, &table)
+        .unwrap();
+
+        // 3) Generate correct lookups
+        let mut lookups = (0..half_n)
+            .map(|i| vec![table[i]; 2])
+            .collect::<Vec<_>>()
+            .concat();
+
+        // 4) Inject a random mistake into f
+        let tamper_index = rng.gen_range(0..lookups.len());
+
+        lookups[tamper_index] += Fr::from(5u64); // small random corruption
+
+        let f = Arc::new(DenseMultilinearExtension::<Fr>::from_evaluations_vec(
+            num_vars, lookups,
+        ));
+
+        // 5) Generate proof & try to verify — expected to fail
+
+        let result = test_lookup_check_helper::<Bls12_381, MultilinearKzgPCS<Bls12_381>>(
+            &f,
+            &preprocessed_table,
+            &pcs_param,
+        );
+
+        match result {
+            Ok(_) => panic!("Verification should fail because f(x) was tampered"),
+
+            Err(e) => {
+                println!("Verification failed as expected. Error: {:?}", e);
+            },
+        }
+
+        Ok(())
+    }
+
     #[test]
     fn test_1() -> Result<(), PolyIOPErrors> {
-        test_lookup_check(1)
+        test_lookup_check(1)?;
+        test_lookup_check_bad_path(1)?;
+        Ok(())
     }
 
     #[test]
     fn test_10() -> Result<(), PolyIOPErrors> {
-        test_lookup_check(10)
+        test_lookup_check(10)?;
+        test_lookup_check_bad_path(10)?;
+        Ok(())
     }
 
     #[test]
     fn test_15() -> Result<(), PolyIOPErrors> {
-        test_lookup_check(15)
+        test_lookup_check(15)?;
+        test_lookup_check_bad_path(15)?;
+        Ok(())
     }
 }

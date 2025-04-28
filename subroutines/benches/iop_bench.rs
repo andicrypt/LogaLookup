@@ -292,7 +292,7 @@ fn bench_lookup_check() -> Result<(), PolyIOPErrors> {
     for nv in (8..19).step_by(2) {
         let srs = Kzg::gen_srs_for_testing(&mut rng, nv + 1)?;
         let (pcs_param, _) = Kzg::trim(&srs, None, Some(nv + 1))?;
-        
+
         let repetition = if nv < 10 {
             10
         } else if nv < 20 {
@@ -324,7 +324,7 @@ fn bench_lookup_check() -> Result<(), PolyIOPErrors> {
                     <PolyIOP<Fr> as LookupCheck<Bls12_381, Kzg>>::init_transcript();
                 transcript.append_message(b"testing", b"initializing transcript for testing")?;
 
-                let (_, _, _, _) = <PolyIOP<Fr> as LookupCheck<Bls12_381, Kzg>>::prove(
+                let (_, _, _, __, _, _) = <PolyIOP<Fr> as LookupCheck<Bls12_381, Kzg>>::prove(
                     &pcs_param,
                     &f,
                     &preprocessed_table,
@@ -340,7 +340,7 @@ fn bench_lookup_check() -> Result<(), PolyIOPErrors> {
                 .unwrap();
             let mut transcript = <PolyIOP<Fr> as LookupCheck<Bls12_381, Kzg>>::init_transcript();
             transcript.append_message(b"testing", b"initializing transcript for testing")?;
-            let (proof, _, _, _) = <PolyIOP<Fr> as LookupCheck<Bls12_381, Kzg>>::prove(
+            let (proof, _, _, _, _, _) = <PolyIOP<Fr> as LookupCheck<Bls12_381, Kzg>>::prove(
                 &pcs_param,
                 &f,
                 &preprocessed_table,
@@ -350,13 +350,8 @@ fn bench_lookup_check() -> Result<(), PolyIOPErrors> {
         };
 
         {
-            let zc_aux_info: VPAuxInfo<Fr> = VPAuxInfo {
-                max_degree: 2,
-                num_variables: nv,
-                phantom: PhantomData::default(),
-            };
             let sc_aux_info: VPAuxInfo<Fr> = VPAuxInfo {
-                max_degree: 1,
+                max_degree: 3,
                 num_variables: nv,
                 phantom: PhantomData::default(),
             };
@@ -368,7 +363,6 @@ fn bench_lookup_check() -> Result<(), PolyIOPErrors> {
                 transcript.append_message(b"testing", b"initializing transcript for testing")?;
                 let _perm_check_sum_claim = <PolyIOP<Fr> as LookupCheck<Bls12_381, Kzg>>::verify(
                     &proof,
-                    &zc_aux_info,
                     &sc_aux_info,
                     &mut transcript,
                 )?;

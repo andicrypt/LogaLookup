@@ -13,7 +13,7 @@ use crate::{
     witness::WitnessColumn,
     LogaHyperPlonkSNARK,
 };
-use arithmetic::{evaluate_opt, gen_eval_point, VPAuxInfo};
+use arithmetic::{eq_eval, evaluate_opt, gen_eval_point, VPAuxInfo};
 use ark_ec::pairing::Pairing;
 use ark_poly::DenseMultilinearExtension;
 use ark_std::{end_timer, log2, start_timer, One, Zero};
@@ -299,12 +299,13 @@ where
         )?;
 
         let f_lk_mle = f_lk.to_mle()?;
-        let (lookup_check_proof, m_poly, a_poly, b_poly) = <Self as LookupCheck<E, PCS>>::prove(
-            &pk.pcs_param,
-            &f_lk_mle,
-            &pk.preprocessed_table,
-            &mut transcript,
-        )?;
+        let (lookup_check_proof, m_poly, a_poly, b_poly, _, _) =
+            <Self as LookupCheck<E, PCS>>::prove(
+                &pk.pcs_param,
+                &f_lk_mle,
+                &pk.preprocessed_table,
+                &mut transcript,
+            )?;
 
         f_lk.add_mle_list(vec![Arc::clone(&f_lk_mle)], -E::ScalarField::one())?;
         let lookup_zc_proof = <Self as ZeroCheck<E::ScalarField>>::prove(&f_lk, &mut transcript)?;
@@ -415,7 +416,7 @@ where
 
         //// 3. LookupCheck & LookupZC Check
 
-        //---- Openings of a,b for sumcheck inside lookup check
+        //---- Openings for sumcheck inside lookup check
         pcs_acc.insert_poly_and_points(
             &a_poly,
             &lookup_check_proof.a_comm,
@@ -425,34 +426,23 @@ where
             &b_poly,
             &lookup_check_proof.b_comm,
             &lookup_check_proof.sc_proof.point,
-        );
-
-        //---- Openings of f_lk_mle, m, t for zerocheck inside lookup check
-        pcs_acc.insert_poly_and_points(
-            &a_poly,
-            &lookup_check_proof.a_comm,
-            &lookup_check_proof.zc_proof.point,
-        );
-        pcs_acc.insert_poly_and_points(
-            &b_poly,
-            &lookup_check_proof.b_comm,
-            &lookup_check_proof.zc_proof.point,
-        );
-        pcs_acc.insert_poly_and_points(
-            &Arc::clone(&f_lk_mle),
-            &lookup_check_proof.f_comm,
-            &lookup_check_proof.zc_proof.point,
         );
         pcs_acc.insert_poly_and_points(
             &m_poly,
             &lookup_check_proof.m_comm,
-            &lookup_check_proof.zc_proof.point,
+            &lookup_check_proof.sc_proof.point,
+        );
+        pcs_acc.insert_poly_and_points(
+            &Arc::clone(&f_lk_mle),
+            &lookup_check_proof.f_comm,
+            &lookup_check_proof.sc_proof.point,
         );
         pcs_acc.insert_poly_and_points(
             &pk.preprocessed_table.t,
             &pk.preprocessed_table.t_comm,
-            &lookup_check_proof.zc_proof.point,
+            &lookup_check_proof.sc_proof.point,
         );
+
 
         //---- Openings of f_lk_mle, q_lk_0..., w_0... for zero check of (f_lk - f_lk_mle)
         let lk_zc_point = &lookup_zc_proof.point;
@@ -598,8 +588,7 @@ where
         let witness_perm_evals = take_next_n(num_witnesses, batch_evals, &mut pointer);
 
         //// 3. Lookup Check
-        let lk_ab_evals = take_next_n(2, batch_evals, &mut pointer);
-        let lk_zc_evals = take_next_n(5, batch_evals, &mut pointer);
+        let lk_sc_evals = take_next_n(5, batch_evals, &mut pointer);
         let lk_mle_eval = take_next_n(1, batch_evals, &mut pointer)[0];
         let lk_selector_evals = take_next_n(num_lk_selectors, batch_evals, &mut pointer);
         let lk_witness_evals = take_next_n(num_witnesses, batch_evals, &mut pointer);
@@ -711,52 +700,42 @@ where
         let step = start_timer!(|| "verify permutation check");
 
         let sc_aux_info: VPAuxInfo<E::ScalarField> = VPAuxInfo {
-            max_degree: 1,
+            max_degree: 3,
             num_variables: num_vars,
             phantom: PhantomData::default(),
         };
-        let zc_aux_info: VPAuxInfo<E::ScalarField> = VPAuxInfo {
-            max_degree: 2,
-            num_variables: num_vars,
-            phantom: PhantomData::default(),
-        };
+
         let lookup_check_subclaim = <Self as LookupCheck<E, PCS>>::verify(
             &proof.lookup_check_proof,
-            &zc_aux_info,
+            // &zc_aux_info,
             &sc_aux_info,
             &mut transcript,
         )?;
 
-        // Verify sumcheck for A - B
+        // Verify the sumcheck
         {
-            let a_eval = lk_ab_evals[0];
-            let b_eval = lk_ab_evals[1];
-            if a_eval - b_eval != lookup_check_subclaim.sum_check_subclaim.expected_evaluation {
-                return Err(HyperPlonkErrors::InvalidProof(
-                    "In lookup check, sumcheck evaluation for A-B failed".to_string(),
-                ));
-            }
-        }
+            let (beta, alpha, gamma) = lookup_check_subclaim.challenges;
 
-        // Verify zero check for p(A, m, t, beta) + alpha*q(f, B, beta)
-        {
-            let a_eval = lk_zc_evals[0];
-            let b_eval = lk_zc_evals[1];
-            let f_eval = lk_zc_evals[2];
-            let m_eval = lk_zc_evals[3];
-            let t_eval = lk_zc_evals[4];
+            let a_eval = lk_sc_evals[0];
+            let b_eval = lk_sc_evals[1];
+            let m_eval = lk_sc_evals[2];
+            let f_eval = lk_sc_evals[3];
+            let t_eval = lk_sc_evals[4];
+            let l_eval = a_eval - b_eval;
+            let h_eval = a_eval * (beta + t_eval) - m_eval + alpha * (b_eval * (beta + f_eval) - E::ScalarField::one());
+            let rchallenges = lookup_check_subclaim.rchallenges;
 
-            let beta = lookup_check_subclaim.challenges.0;
-            let alpha = lookup_check_subclaim.challenges.1;
+            let eq_x_r_eval = eq_eval(
+                &lookup_check_subclaim.sum_check_subclaim.point,
+                &rchallenges,
+            )?;
+            let h_hat_eval = h_eval * eq_x_r_eval;
 
-            if a_eval * (beta + t_eval) - m_eval
-                + alpha * ((beta + f_eval) * b_eval - E::ScalarField::one())
-                != lookup_check_subclaim
-                    .zero_check_subclaim
-                    .expected_evaluation
+            if h_hat_eval + gamma * l_eval
+                != lookup_check_subclaim.sum_check_subclaim.expected_evaluation
             {
                 return Err(HyperPlonkErrors::InvalidProof(
-                    "In lookup check, zerocheck evaluation for p + alpha * q failed".to_string(),
+                    "In lookup check, sumcheck evaluation failed".to_string(),
                 ));
             }
         }
@@ -866,20 +845,15 @@ where
 
         //// 6.3. Openings for lookup check + lookup ZC check
 
-        //-- A, B for sum check
+        //-- A, B, m, f, t for sum check
         let lookup_check_sc_point = lookup_check_subclaim.sum_check_subclaim.point;
         comms.push(proof.lookup_check_proof.a_comm);
         comms.push(proof.lookup_check_proof.b_comm);
-        points.append(&mut vec![lookup_check_sc_point; 2]);
-
-        //-- p(A,t,m) + alpha * q(B,f) for zero check
-        let lookup_check_zc_point = lookup_check_subclaim.zero_check_subclaim.point;
-        comms.push(proof.lookup_check_proof.a_comm); // for A
-        comms.push(proof.lookup_check_proof.b_comm); // for B
+        comms.push(proof.lookup_check_proof.m_comm); // for A
         comms.push(proof.lookup_check_proof.f_comm); // for f
-        comms.push(proof.lookup_check_proof.m_comm); // for m
         comms.push(vk.table_commitment); // for t
-        points.append(&mut vec![lookup_check_zc_point; 5]);
+        points.append(&mut vec![lookup_check_sc_point; 5]);
+
 
         //-- f_lk_mle, q_lk, w for lookup ZC check
         let lk_zc_point = lookup_zc_subclaim.point;
