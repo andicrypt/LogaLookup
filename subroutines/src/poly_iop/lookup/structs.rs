@@ -30,4 +30,5 @@ where
 
     pub t_delta: Arc<DenseMultilinearExtension<E::ScalarField>>,
     pub t_delta_comm: PCS::Commitment,
+    pub quadratic_generator_nv_one: Vec<usize>,
 }

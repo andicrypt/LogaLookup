@@ -6,7 +6,7 @@ use std::sync::Arc;
 use transcript::IOPTranscript;
 
 pub mod utils;
-use self::utils::{compute_h, compute_poly_delta, embed};
+use self::utils::{compute_h, compute_poly_delta, embed, quadratic_generator};
 use super::structs::PlookupPreprocessedTable;
 use dashmap::DashMap;
 
@@ -98,7 +98,10 @@ where
             )));
         };
 
-        let t = embed(table, nv)?;
+        let qg_nv = quadratic_generator(nv)?;
+        let qg_nv_one = quadratic_generator(nv + 1)?;
+
+        let t = embed(table, nv, &qg_nv)?;
         let t_comm = PCS::commit(pcs_param, &t)?;
 
         let t_delta = compute_poly_delta(&t, nv)?;
@@ -116,6 +119,7 @@ where
             t_comm,
             t_delta,
             t_delta_comm,
+            quadratic_generator_nv_one: qg_nv_one,
         })
     }
 
@@ -141,7 +145,11 @@ where
         let h = compute_h(f, &preprocessed_table.table, &preprocessed_table.table_map)?;
 
         // num vars: nv + 1
-        let h_emb = embed(&h, num_vars + 1)?;
+        let h_emb = embed(
+            &h,
+            num_vars + 1,
+            &preprocessed_table.quadratic_generator_nv_one,
+        )?;
         let h_comm = PCS::commit(pcs_param, &h_emb)?;
         transcript.append_serializable_element(b"h_comm", &h_comm)?;
 

@@ -1,6 +1,6 @@
 use ark_ff::PrimeField;
 use ark_poly::DenseMultilinearExtension;
-use dashmap::{DashMap, DashSet};
+use dashmap::DashMap;
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use std::sync::Arc;
 
@@ -17,8 +17,10 @@ pub(super) fn compute_h<F: PrimeField>(
         "lookup size and table size are incorrect"
     );
 
+    // h_f store f_i and number of occurences of f_i in the table
     let h_f = DashMap::new();
 
+    #[cfg(feature = "parallel")]
     f.evaluations
         .par_iter()
         .map(|num| -> Result<(), PolyIOPErrors> {
@@ -31,23 +33,95 @@ pub(super) fn compute_h<F: PrimeField>(
             Ok(())
         })
         .collect::<Result<Vec<_>, _>>()?;
-
-    let mut evaluations: Vec<F> = vec![];
-    let table_set = DashSet::new();
-    for num in t.iter() {
-        if !table_set.contains(num) {
-            let h_t_val: usize = *h_t.get(num).unwrap();
-            if let Some(h_f_val) = h_f.get(num) {
-                evaluations.append(&mut vec![*num; h_t_val + *h_f_val]);
-            } else {
-                evaluations.append(&mut vec![*num; h_t_val]);
+    #[cfg(not(feature = "parallel"))]
+    f.evaluations
+        .iter()
+        .try_for_each(|num| -> Result<(), PolyIOPErrors> {
+            if h_t.get(num).is_none() {
+                return Err(PolyIOPErrors::InvalidProof(format!(
+                    "Lookup value {num} is not in table"
+                )));
             }
-            table_set.insert(*num);
+            h_f.entry(*num).or_insert_with(|| 0) += 1;
+            Ok(())
+        })?;
+
+    #[cfg(feature = "parallel")]
+    let evaluations: Vec<F> = {
+        use dashmap::DashSet;
+        use rayon::prelude::*;
+
+        let table_set = DashSet::new();
+
+        let partial_result: Vec<Vec<F>> = t
+            .par_iter()
+            .filter_map(|num| {
+                if table_set.insert(*num) {
+                    let h_t_val = *h_t.get(num)?;
+                    let count = h_f.get(num).map_or(h_t_val, |h_f_val| h_t_val + *h_f_val);
+                    Some(std::iter::repeat(*num).take(count).collect::<Vec<F>>())
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        partial_result.into_par_iter().flatten().collect()
+    };
+    #[cfg(not(feature = "parallel"))]
+    let evaluations: Vec<F> = {
+        use std::collections::HashSet;
+
+        let mut table_set = HashSet::new();
+        let mut evaluations = Vec::new();
+
+        for num in t.iter() {
+            if table_set.insert(*num) {
+                let h_t_val = *h_t.get(num).unwrap();
+                let count = h_f.get(num).map_or(h_t_val, |h_f_val| h_t_val + *h_f_val);
+                evaluations.extend(std::iter::repeat(*num).take(count));
+            }
         }
-    }
+
+        evaluations
+    };
 
     Ok(evaluations)
 }
+
+pub const PRIMITIVE_POLYNOMIALS: [usize; 31] = [
+    0b111,                               //2
+    0b1011,                              //3
+    0b10011,                             //4
+    0b100101,                            //5
+    0b1000011,                           //6
+    0b10000011,                          //7
+    0b100011101,                         //8
+    0b1000010001,                        //9
+    0b10000001001,                       //10
+    0b100000000101,                      //11
+    0b1000001010011,                     //12
+    0b10000000011011,                    //13
+    0b100000101000011,                   //14
+    0b1000000000000011,                  //15
+    0b10001000000001011,                 //16
+    0b100000000000001001,                //17
+    0b1000000000010000001,               //18
+    0b10000000000001100011,              //19
+    0b100000000000000001001,             //20
+    0b1000000000000000000101,            //21
+    0b10000000000000000000011,           //22
+    0b100000000000000000100001,          //23
+    0b1000000000000000000011011,         //24
+    0b10000000000000000000001001,        //25
+    0b100000000000000000110000011,       //26
+    0b1000000000000000000110000011,      //27
+    0b10000000000000000000000001001,     //28
+    0b100000000000000000000000000101,    //29
+    0b1000000100000000000000000000111,   //30
+    0b10000000000000000000000000001001,  //31
+    0b100000000100000000000000000000111, //32
+];
 
 pub(super) fn get_primitive_polynomial(nv: usize) -> Result<usize, PolyIOPErrors> {
     if !(2..=33).contains(&nv) {
@@ -56,40 +130,7 @@ pub(super) fn get_primitive_polynomial(nv: usize) -> Result<usize, PolyIOPErrors
         ));
     }
 
-    let primitive_polynomial: Vec<usize> = vec![
-        0b111,                               //2
-        0b1011,                              //3
-        0b10011,                             //4
-        0b100101,                            //5
-        0b1000011,                           //6
-        0b10000011,                          //7
-        0b100011101,                         //8
-        0b1000010001,                        //9
-        0b10000001001,                       //10
-        0b100000000101,                      //11
-        0b1000001010011,                     //12
-        0b10000000011011,                    //13
-        0b100000101000011,                   //14
-        0b1000000000000011,                  //15
-        0b10001000000001011,                 //16
-        0b100000000000001001,                //17
-        0b1000000000010000001,               //18
-        0b10000000000001100011,              //19
-        0b100000000000000001001,             //20
-        0b1000000000000000000101,            //21
-        0b10000000000000000000011,           //22
-        0b100000000000000000100001,          //23
-        0b1000000000000000000011011,         //24
-        0b10000000000000000000001001,        //25
-        0b100000000000000000110000011,       //26
-        0b1000000000000000000110000011,      //27
-        0b10000000000000000000000001001,     //28
-        0b100000000000000000000000000101,    //29
-        0b1000000100000000000000000000111,   //30
-        0b10000000000000000000000000001001,  //31
-        0b100000000100000000000000000000111, //32
-    ];
-    Ok(primitive_polynomial[nv - 2].clone())
+    Ok(PRIMITIVE_POLYNOMIALS[nv - 2].clone())
 }
 
 /// g_mu(b1,...,b_mu) = (b_mu, b1', ... , b_{mu-1}')
@@ -119,21 +160,34 @@ pub(super) fn next_element(cur_num: usize, nv: usize) -> usize {
     next_num
 }
 
+pub fn quadratic_generator(nv: usize) -> Result<Vec<usize>, PolyIOPErrors> {
+    let length = (1 << nv) - 1;
+    let mut indices = Vec::with_capacity(length);
+    let mut cur = 1 << (nv - 1);
+    for _ in 0..length {
+        indices.push(cur);
+        cur = next_element(cur, nv);
+    }
+    Ok(indices)
+}
+
 pub fn embed<F: PrimeField>(
     poly_evals: &[F], //2^num_vars - 1
     nv: usize,
+    indices: &Vec<usize>,
 ) -> Result<Arc<DenseMultilinearExtension<F>>, PolyIOPErrors> {
     assert!(
         poly_evals.len() == (1 << nv) - 1,
         "Embedded evaluations must be in form of pow(2,nv) - 1"
     );
+    assert!(
+        indices.len() == poly_evals.len(),
+        "Quadratic generator must be equal polynomial evaluation"
+    );
 
-    let mut embedded_poly_evals: Vec<F> = vec![F::zero(); 1 << nv];
-    let mut cur_element: usize = 1 << (nv - 1);
-
-    for item in poly_evals.iter() {
-        embedded_poly_evals[cur_element] = *item;
-        cur_element = next_element(cur_element, nv);
+    let mut embedded_poly_evals = vec![F::zero(); 1 << nv];
+    for (idx, val) in indices.iter().zip(poly_evals.iter()) {
+        embedded_poly_evals[*idx] = *val;
     }
 
     Ok(Arc::new(DenseMultilinearExtension::from_evaluations_vec(
@@ -201,7 +255,9 @@ mod test {
         let nv = 3;
         let poly_evals = (1..8).map(Fr::from).collect::<Vec<_>>();
 
-        let poly_embed = embed(&poly_evals, nv)?;
+        let qg_nv = quadratic_generator(nv)?;
+
+        let poly_embed = embed(&poly_evals, nv, &qg_nv)?;
 
         let poly_embed_evals = &poly_embed.evaluations;
 
